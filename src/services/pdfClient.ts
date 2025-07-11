@@ -1,4 +1,3 @@
-
 // This file manages the communication with the PDF Web Worker.
 // It abstracts away the complexity of creating, messaging, and terminating the worker.
 import pdfWorkerSource from './pdf.worker';

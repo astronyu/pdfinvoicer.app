@@ -1,5 +1,3 @@
-
-
 import { supabase } from './db';
 import { Invoice, SenderInfo, BankInfo, Client, AppSettings, PdfSchemeName, LineItem } from '../types';
 import type { 

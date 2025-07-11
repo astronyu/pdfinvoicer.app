@@ -1,5 +1,3 @@
-
-
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Invoice, Settings, PdfSchemeName, PdfColorTheme, LineItem } from '../types';
