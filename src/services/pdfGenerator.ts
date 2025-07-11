@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { Invoice, Settings, PdfSchemeName, PdfColorTheme, LineItem } from '../types';
+import type { Invoice, Settings, PdfSchemeName, PdfColorTheme, LineItem, SignatureFontName } from '../types';
 
 // Augment the jsPDF interface to include properties added by jspdf-autotable
 declare module 'jspdf' {
@@ -27,8 +27,43 @@ export const colorSchemes: Record<PdfSchemeName, PdfColorTheme> = {
     'Teal & Terracotta': { primary: '#008080', secondary: '#5AA0A0', accent: '#E2725B', headerBar: '#5AA0A0', headerBg: '#E6F2F2', textLight: '#FFFFFF', textDark: '#004D4D', tableBgPrimary: '#D6E7E7', tableBgSecondary: '#F6FBFB' },
 };
 
+// Mapping for signature fonts to their CDN URLs and internal jsPDF names
+const signatureFontMap: Record<SignatureFontName, { url: string; jspdfName: string; style: string }> = {
+    'Times-Italic': { url: '', jspdfName: 'times', style: 'italic' }, // Built-in jsPDF font
+    'Caveat': { url: 'https://cdn.jsdelivr.net/gh/astronyu/signaturefonts@main/fonts/Caveat-Regular-normal.js', jspdfName: 'Caveat', style: 'normal' },
+    'Dancing Script': { url: 'https://cdn.jsdelivr.net/gh/astronyu/signaturefonts@main/fonts/DancingScript-Regular-normal.js', jspdfName: 'DancingScript', style: 'normal' },
+    'Great Vibes': { url: 'https://cdn.jsdelivr.net/gh/astronyu/signaturefonts@main/fonts/GreatVibes-Regular-normal.js', jspdfName: 'GreatVibes', style: 'normal' },
+    'Pacifico': { url: 'https://cdn.jsdelivr.net/gh/astronyu/signaturefonts@main/fonts/Pacifico-Regular-normal.js', jspdfName: 'Pacifico', style: 'normal' },
+};
 
-export const drawInvoiceOnDoc = (doc: jsPDF, invoice: Invoice, settings: Settings, schemeName: PdfSchemeName) => {
+// Temporary hack: Make jsPDF globally available for CDN scripts if they expect it
+// This should be done at the module level to ensure it's available before any font imports.
+if (typeof window !== 'undefined') {
+    (window as any).jsPDF = jsPDF;
+}
+
+// Export a promise that resolves when all custom fonts are loaded
+export const fontsLoadedPromise = (async () => {
+    console.log('[PDF Generator] Starting pre-loading of custom fonts...');
+    for (const fontName in signatureFontMap) {
+        const font = signatureFontMap[fontName as SignatureFontName];
+        if (font.url) { // Only load fonts that have a CDN URL
+            try {
+                // Use /* @vite-ignore */ to prevent Vite from trying to bundle this dynamic import
+                await import(/* @vite-ignore */ font.url);
+                console.log(`[PDF Generator] Successfully pre-loaded font: ${fontName}`);
+            } catch (error) {
+                console.error(`[PDF Generator] Failed to pre-load font ${fontName} from CDN:`, error);
+            }
+        }
+    }
+    console.log('[PDF Generator] Finished pre-loading of custom fonts.');
+})(); // Immediately invoke the async function
+
+export const drawInvoiceOnDoc = async (doc: jsPDF, invoice: Invoice, settings: Settings, schemeName: PdfSchemeName, signatureFont: SignatureFontName) => {
+    // Ensure fonts are loaded before drawing
+    await fontsLoadedPromise; // Await the promise here
+
     const theme = colorSchemes[schemeName] || colorSchemes['Classic'];
     const { sender, bank } = settings || {};
     const safeSender = sender || { name: '', address: '', phone: '' };
@@ -345,7 +380,18 @@ export const drawInvoiceOnDoc = (doc: jsPDF, invoice: Invoice, settings: Setting
     const sigX = (totalsX_start + (pageWidth - totalsX_start) / 2) - 20;
     const sigLineWidth = 60;
 
-    doc.setFont('helvetica', 'italic');
+    // Get the selected font details from the pre-loaded map
+    const selectedFont = signatureFontMap[signatureFont];
+    const actualFontName = selectedFont.jspdfName;
+    const actualFontStyle = selectedFont.style;
+
+    console.log(`[PDF Generator] Current font before signature text: ${doc.getFont().fontName}, ${doc.getFont().fontStyle}`);
+    console.log(`[PDF Generator] Attempting to set font for signature: ${actualFontName}, style: ${actualFontStyle}`);
+    console.log('[PDF Generator] Available fonts before setting signature font:', doc.getFontList()); // Log available fonts
+
+    doc.setFont(actualFontName, actualFontStyle);
+    console.log(`[PDF Generator] Font after setFont for signature text: ${doc.getFont().fontName}, ${doc.getFont().fontStyle}`);
+
     doc.setFontSize(16);
     doc.setTextColor(theme.textDark);
     doc.text(safeBank.contactName || safeSender.name, sigX, sigBlockY, { align: 'center' });
@@ -356,7 +402,7 @@ export const drawInvoiceOnDoc = (doc: jsPDF, invoice: Invoice, settings: Setting
     doc.line(sigX - sigLineWidth / 2, sigBlockY, sigX + sigLineWidth / 2, sigBlockY);
 
     sigBlockY += 5;
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('helvetica', 'bold'); // Reset to helvetica bold for "Authorised Sign"
     doc.setFontSize(9);
     doc.text('Authorised Sign', sigX, sigBlockY, { align: 'center' });
 

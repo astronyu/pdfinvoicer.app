@@ -6,6 +6,7 @@ export type AppUser = SupabaseUser & {
         is_admin?: boolean;
         credits?: number;
         status?: 'active' | 'deactivated' | null;
+        signature_font?: SignatureFontName; // Add signature_font to profile
     };
 };
 
@@ -38,6 +39,7 @@ export interface Client {
 
 export interface AppSettings {
     pdfTheme: PdfSchemeName;
+    signatureFont: SignatureFontName; // Add signatureFont to AppSettings
 }
 
 export type PdfSchemeName =
@@ -54,6 +56,13 @@ export type PdfSchemeName =
     | 'Plum & Copper'
     | 'Teal & Terracotta';
 
+export type SignatureFontName =
+    | 'Helvetica' // Default fallback
+    | 'Times-Italic' // New default
+    | 'Caveat'
+    | 'Dancing Script'
+    | 'Great Vibes'
+    | 'Pacifico';
 
 export interface PdfColorTheme {
     primary: string;

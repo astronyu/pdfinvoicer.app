@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SenderInfo, BankInfo, PdfSchemeName, AppUser } from '../../types';
+import { SenderInfo, BankInfo, PdfSchemeName, AppUser, SignatureFontName } from '../../types';
 import * as supa from '../../services/supabase';
 import { colorSchemes } from '../../services/pdfGenerator';
 import { UploadIcon, DownloadIcon } from '@radix-ui/react-icons';
@@ -20,9 +20,11 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onUserUpdate, o
     const { 
         settings, 
         pdfTheme, 
+        signatureFont, // Get signatureFont from context
         loading: settingsLoading, 
         reloadSettings,
         updatePdfTheme,
+        updateSignatureFont, // Get updateSignatureFont from context
     } = useSettings();
     const toast = useToast();
     const navigate = useNavigate();
@@ -40,12 +42,16 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onUserUpdate, o
 
     useEffect(() => {
         if (settings) {
+            console.log('[Settings.tsx] useEffect - Settings loaded:', settings);
+            console.log('[Settings.tsx] useEffect - Bank address from settings:', settings.bank.bankAddress);
             setSender(settings.sender);
             setBank(settings.bank);
         }
     }, [settings]);
 
     const schemeNames = Object.keys(colorSchemes) as PdfSchemeName[];
+    // Updated signatureFontNames: Removed 'Helvetica', added 'Times-Italic'
+    const signatureFontNames: SignatureFontName[] = ['Times-Italic', 'Caveat', 'Dancing Script', 'Great Vibes', 'Pacifico'];
     
     const handleExport = async () => {
         if (!window.confirm("This will generate a JSON file containing all your invoices, clients, and settings. Are you sure you want to proceed?")) {
@@ -101,7 +107,14 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onUserUpdate, o
         toast.addToast('PDF theme updated!', 'success');
     };
 
+    const handleSignatureFontChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newFont = e.target.value as SignatureFontName;
+        updateSignatureFont(newFont);
+        toast.addToast('Signature font updated!', 'success');
+    };
+
     const handleSave = async () => {
+        console.log('[Settings.tsx] handleSave - Bank state before saving:', bank);
         try {
             await Promise.all([
                 supa.saveSenderInfo({ ...sender, userId: currentUser.id }),
@@ -259,13 +272,25 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onUserUpdate, o
                             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Select a color theme for your generated PDF invoices. Saved automatically.</p>
                         </div>
                         <div>
+                            <label htmlFor="signatureFont" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Signature Font</label>
+                            <select id="signatureFont" name="signatureFont" value={signatureFont} onChange={handleSignatureFontChange} className={inputClasses}>
+                                {signatureFontNames.map(name => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
+                            </select>
+                            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Choose a font for the authorized signature on your PDF.</p>
+                        </div>
+                        <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Signature Preview</label>
                             <div className="mt-2 p-4 border dark:border-gray-600 rounded-md text-center bg-gray-50 dark:bg-gray-900/50">
-                                <p className="text-2xl" style={{ fontFamily: 'Helvetica, sans-serif', fontStyle: 'italic' }}>
+                                <p className="text-2xl" style={{ 
+                                    fontFamily: signatureFont === 'Times-Italic' ? "'Times New Roman', Times, serif" : `'${signatureFont}', cursive`, 
+                                    fontStyle: signatureFont === 'Times-Italic' ? 'italic' : 'normal' 
+                                }}>
                                     {bank.contactName || sender.name || "Signature Preview"}
                                 </p>
                             </div>
-                            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">The signature on your PDF will be rendered in an elegant, cursive style.</p>
+                            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">The signature on your PDF will be rendered in the selected style.</p>
                         </div>
                     </div>
                 </div>

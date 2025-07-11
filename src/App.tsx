@@ -123,6 +123,7 @@ export const App: React.FC = () => {
               is_admin: profile.is_admin ?? false,
               credits: profile.credits ?? 0,
               status: profile.status ?? 'active',
+              signature_font: profile.signature_font ?? 'Helvetica', // Load signature_font from profile
             },
           };
 

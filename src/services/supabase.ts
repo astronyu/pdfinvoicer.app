@@ -1,13 +1,13 @@
 import { supabase } from './db';
 import { Invoice, SenderInfo, BankInfo, Client, AppSettings, PdfSchemeName, LineItem } from '../types';
-import type { 
+import type {
     Database,
-    InvoiceRow, 
-    ClientRow, 
-    SenderInfoRow, 
-    BankInfoRow, 
-    AppSettingsRow, 
-    ProfileRow, 
+    InvoiceRow,
+    ClientRow,
+    SenderInfoRow,
+    BankInfoRow,
+    AppSettingsRow,
+    ProfileRow,
     AppSettingsInsert,
     InvoiceInsert,
     InvoiceUpdate,
@@ -90,7 +90,7 @@ export const getInvoiceById = async (invoiceId: number): Promise<Invoice | null>
         console.error('Error getting invoice by ID:', error.message);
         return null;
     }
-    
+
     return inv ? mapDbInvoiceToApp(inv as InvoiceRow) : null;
 };
 
@@ -100,7 +100,7 @@ export const getAllUserInvoices = async (userId: string): Promise<Invoice[]> => 
         .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: false });
-        
+
     if (error) {
         console.error('Error getting all user invoices:', error.message);
         return [];
@@ -117,7 +117,7 @@ export const updateInvoiceStatus = async (invoiceId: number, status: 'Paid' | 'U
 export const getNextInvoiceNumber = async (userId: string): Promise<string> => {
     const yearSuffix = new Date().getFullYear().toString().slice(-2);
     const pattern = `%-${yearSuffix}`;
-    
+
     const { data, error } = await supabase
         .from('invoices')
         .select('invoice_number')
@@ -178,7 +178,7 @@ export const addOrUpdateInvoice = async (invoice: Invoice) => {
              return { data: null, error: clientError };
         }
     }
-    
+
     if (invoice.id) {
         // UPDATE an existing invoice
         const { data, error } = await supabase
@@ -187,7 +187,7 @@ export const addOrUpdateInvoice = async (invoice: Invoice) => {
             .eq('id', invoice.id)
             .select()
             .single();
-        
+
         return { data, error };
 
     } else {
@@ -197,7 +197,7 @@ export const addOrUpdateInvoice = async (invoice: Invoice) => {
             .insert(dbInvoicePayload)
             .select()
             .single();
-        
+
         return { data, error };
     }
 };
@@ -274,13 +274,18 @@ export const getBankInfo = async (userId: string): Promise<BankInfo | null> => {
         .select('*')
         .eq('user_id', userId)
         .maybeSingle();
-        
+
     if (error) {
         console.error('Error getting bank info:', error.message);
         return null;
     }
-    if (!data) return null;
+    if (!data) {
+        console.log('[supabase.ts] getBankInfo - No bank info found for user:', userId);
+        return null;
+    }
     const bankInfoRow = data as BankInfoRow;
+    console.log('[supabase.ts] getBankInfo - Raw data from DB:', bankInfoRow);
+    console.log('[supabase.ts] getBankInfo - Mapped bankAddress:', bankInfoRow.bank_address);
     return {
         id: bankInfoRow.id,
         userId: bankInfoRow.user_id,
@@ -295,6 +300,7 @@ export const getBankInfo = async (userId: string): Promise<BankInfo | null> => {
 };
 
 export const saveBankInfo = async (info: BankInfo) => {
+    console.log('[supabase.ts] saveBankInfo - Info received for saving:', info);
     const dbInfo: BankInfoInsert = {
         id: info.id,
         user_id: info.userId,
@@ -304,12 +310,41 @@ export const saveBankInfo = async (info: BankInfo) => {
         contact_email: info.contactEmail,
         bank_name: info.bankName,
         swift_code: info.swiftCode,
-        account_number: info.accountNumber
+        account_number: info.account_number
     };
-    return await supabase.from('bank_info').upsert(dbInfo, { onConflict: 'user_id' });
+    console.log('[supabase.ts] saveBankInfo - Payload sent to DB:', dbInfo);
+    const { data, error } = await supabase.from('bank_info').upsert(dbInfo, { onConflict: 'user_id' });
+    if (error) {
+        console.error('[supabase.ts] saveBankInfo - Error saving bank info:', error.message);
+    } else {
+        console.log('[supabase.ts] saveBankInfo - Successfully saved bank info:', data);
+    }
+    return { data, error };
 };
 
 // --- User Profile/Account ---
+export const getProfile = async (userId: string): Promise<ProfileRow | null> => {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Error getting profile:', error.message);
+        return null;
+    }
+    return data as ProfileRow;
+};
+
+export const updateProfile = async (userId: string, updates: ProfileUpdate) => {
+    const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
+    if (error) {
+        console.error("Error updating profile:", error.message);
+        throw error;
+    }
+};
+
 export const deductCredit = async (userId: string) => {
     // BETA MODE: Credit deduction is disabled to prevent app crashes and allow free testing.
     return null;
@@ -317,7 +352,7 @@ export const deductCredit = async (userId: string) => {
     /*
     // This should ideally be an RPC call to prevent race conditions
     // and for security, but for simplicity, we do it client-side.
-    const { data: profile } = await supabase.from('profiles').select('credits, is_admin').eq('id', userId).single();
+    const { data: profile } = await supabase.from('profiles').select('credits, is_admin').single();
     if (!profile || profile.is_admin || profile.credits >= 9999) return null;
     if (profile.credits <= 0) throw new Error("Insufficient credits");
 
