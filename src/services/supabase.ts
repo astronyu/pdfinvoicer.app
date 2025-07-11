@@ -57,23 +57,18 @@ const mapDbInvoiceToApp = (inv: InvoiceRow): Invoice => {
 
 // --- Settings ---
 export const getSetting = async (userId: string, key: string): Promise<string | null> => {
-    try {
-        const { data, error } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('user_id', userId)
-            .eq('key', key)
-            .single();
+    const { data, error } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('user_id', userId)
+        .eq('key', key)
+        .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') { // Ignore 'PGRST116' (row not found)
-            console.error(`Error getting setting for key "${key}":`, error.message);
-        }
-        return (data as AppSettingsRow)?.value || null;
-    } catch (error) {
-        // Gracefully handle any errors, including PGRST116
-        console.warn(`Setting not found for key "${key}"`);
+    if (error) {
+        console.error(`Error getting setting for key "${key}":`, error.message);
         return null;
     }
+    return (data as AppSettingsRow)?.value || null;
 };
 
 export const saveSetting = async (userId: string, key: string, value: string) => {
@@ -252,9 +247,12 @@ export const getSenderInfo = async (userId: string): Promise<SenderInfo | null> 
         .from('sender_info')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-    if (error && error.code !== 'PGRST116') console.error('Error getting sender info:', error.message);
+    if (error) {
+        console.error('Error getting sender info:', error.message);
+        return null;
+    }
     if (!data) return null;
     const senderInfoRow = data as SenderInfoRow;
     return {
@@ -277,9 +275,12 @@ export const getBankInfo = async (userId: string): Promise<BankInfo | null> => {
         .from('bank_info')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
         
-    if (error && error.code !== 'PGRST116') console.error('Error getting bank info:', error.message);
+    if (error) {
+        console.error('Error getting bank info:', error.message);
+        return null;
+    }
     if (!data) return null;
     const bankInfoRow = data as BankInfoRow;
     return {
